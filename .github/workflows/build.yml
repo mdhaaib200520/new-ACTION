@@ -163,11 +163,11 @@ jobs:
         lunch ${{ env.DEVICE_MAKEFILE }}-eng && make clean && make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
         echo "Done building your ${{ github.event.inputs.BUILD_TARGET }}.img"
       
-   - name: Set Build Date # Output will be used in Release
+    - name: Set Build Date # Output will be use in Release
       run: |
         echo "BUILD_DATE=$(date +%Y%m%d)" >> $GITHUB_ENV
 
-    - name: Check if Recovery Exists
+        - name: Check if Recovery Exist
       run: |
         cd workspace
         if [ -f out/target/product/${{ github.event.inputs.DEVICE_NAME }}/recovery.img ]; then
@@ -187,6 +187,7 @@ jobs:
             exit 1
         fi
 
+        fi
 
     - name: Include Recovery Installer
       run: |
