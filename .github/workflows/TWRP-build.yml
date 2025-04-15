@@ -32,7 +32,7 @@ jobs:
     - name: Clone device tree
       run: |
         cd ~/twrp
-        git clone https://github.com/<your_username>/<your_repo>.git device/<vendor>/<codename>
+        git clone https://github.com/mdhaaib200520/redmi14c-lake-twrp_device-tree.git
 
     - name: Start build
       run: |
