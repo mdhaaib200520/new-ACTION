@@ -1,49 +1,43 @@
-name: Build TWRP
+name: TWRP Build CI
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    container: docker://ghcr.io/ubports-ci/android-build:main
 
     steps:
-    - name: Checkout
+    - name: Checkout Device Tree
       uses: actions/checkout@v3
-
-    - name: Install dependencies
-      run: |
-        sudo apt update
-        sudo apt install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop openjdk-8-jdk pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev
-
-    - name: Set up JDK 8
-      uses: actions/setup-java@v3
       with:
-        distribution: 'temurin'
-        java-version: 8
+        path: device
 
-    - name: Initialize repo
+    - name: Initialize TWRP Build Environment
       run: |
-        mkdir -p ~/twrp
-        cd ~/twrp
+        mkdir -p ~/android/twrp
+        cd ~/android/twrp
         repo init -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git -b twrp-12.1
-        repo sync --force-sync --no-tags --no-clone-bundle -j$(nproc)
+        repo sync -j$(nproc) --force-sync --no-clone-bundle --no-tags
 
-    - name: Clone device tree
+    - name: Copy Device Tree
       run: |
-        cd ~/twrp
-        git clone https://github.com/mdhaaib200520/redmi14c-lake-twrp_device-tree.git
+        mkdir -p ~/android/twrp/device/<brand>/<codename>
+        cp -r device/* ~/android/twrp/device/<brand>/<codename>/
 
-    - name: Start build
+    - name: Build TWRP
       run: |
-        cd ~/twrp
+        cd ~/android/twrp
         export ALLOW_MISSING_DEPENDENCIES=true
-        . build/envsetup.sh
-        lunch omni_<codename>-eng
+        source build/envsetup.sh
+        lunch twrp_<codename>-eng
         mka recoveryimage
 
-    - name: Upload recovery
-    - uses: actions/upload-artifact@v3
+    - name: Upload Recovery Image
+      uses: actions/upload-artifact@v3
       with:
-        name: recovery.img
-        path: ~/twrp/out/target/product/<codename>/recovery.img
+        name: TWRP-recovery.img
+        path: ~/android/twrp/out/target/product/<codename>/recovery.img
