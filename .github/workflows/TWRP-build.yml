@@ -1,9 +1,9 @@
 name: TWRP Builder + Release
 
 on:
-  workflow_dispatch:  # Manual trigger
+  workflow_dispatch:
   push:
-    tags:            # Auto-release when you push a tag (e.g., v1.0)
+    tags:
       - 'v*'
 
 env:
@@ -18,13 +18,19 @@ jobs:
 
     steps:
     - name: Checkout Script Repo
-      uses: actions/checkout@v4  # Updated to v4
+      uses: actions/checkout@v4
 
     - name: Set up Build Environment
       run: |
         sudo apt-get update -y
         sudo apt-get install -y bc bison build-essential ccache curl flex git gnupg gperf \
           liblz4-tool libncurses5-dev libssl-dev libxml2 lzop m4 python3 python3-pip zip
+        
+        # Install repo tool
+        mkdir -p ~/bin
+        curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
+        chmod a+rx ~/bin/repo
+        echo "$HOME/bin" >> $GITHUB_PATH
 
     - name: Initialize TWRP Repo
       run: |
@@ -52,7 +58,7 @@ jobs:
         echo "BUILD_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
 
     - name: Upload Artifact
-      uses: actions/upload-artifact@v4  # Changed from v3 to v4
+      uses: actions/upload-artifact@v4
       with:
         name: TWRP-${{ env.DEVICE_CODENAME }}
         path: ~/twrp/out/target/product/${{ env.DEVICE_CODENAME }}/TWRP-${{ env.DEVICE_CODENAME }}-${{ env.BUILD_DATE }}.img
@@ -65,12 +71,12 @@ jobs:
 
     steps:
     - name: Download Artifact
-      uses: actions/download-artifact@v4  # Changed from v3 to v4
+      uses: actions/download-artifact@v4
       with:
         name: TWRP-${{ env.DEVICE_CODENAME }}
 
     - name: Create GitHub Release
-      uses: softprops/action-gh-release@v2  # Updated to v2
+      uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ github.ref_name }}
         name: "TWRP ${{ env.BUILD_DATE }} for ${{ env.DEVICE_CODENAME }}"
