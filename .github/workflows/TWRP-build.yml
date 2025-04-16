@@ -20,6 +20,9 @@ jobs:
     - name: Checkout Script Repo
       uses: actions/checkout@v4
 
+    - name: Check Disk Space (Initial)
+      run: df -h
+
     - name: Set up Build Environment
       run: |
         sudo apt-get update -y
@@ -32,12 +35,17 @@ jobs:
         chmod a+rx ~/bin/repo
         echo "$HOME/bin" >> $GITHUB_PATH
 
+    - name: Clean Up Before TWRP Sync
+      run: |
+        sudo apt-get clean
+        sudo rm -rf /usr/local/share/boost /usr/share/dotnet /opt/ghc
+        df -h
+
     - name: Initialize TWRP Repo
       run: |
         mkdir -p ~/twrp && cd ~/twrp
         repo init -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git -b $TWRP_BRANCH --depth=1
         repo sync -c --no-clone-bundle --no-tags --optimized-fetch --prune --force-sync -j1
-
 
     - name: Clone Device Tree
       run: |
@@ -50,7 +58,12 @@ jobs:
         export ALLOW_MISSING_DEPENDENCIES=true
         source build/envsetup.sh
         lunch twrp_$DEVICE_CODENAME-eng
-        mka -j$(nproc --all) recoveryimage
+        mka recoveryimage -j1
+
+    - name: Clean Up Before Artifact Upload
+      run: |
+        sudo rm -rf ~/twrp/.repo  # Delete repo metadata (saves ~1GB+)
+        df -h
 
     - name: Prepare Release Assets
       run: |
