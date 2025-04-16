@@ -1,43 +1,82 @@
-name: TWRP Build CI
+name: TWRP Builder + Release
 
 on:
+  workflow_dispatch:  # Manual trigger
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    tags:            # Auto-release when you push a tag (e.g., v1.0)
+      - 'v*'
+
+env:
+  DEVICE_BRAND: xiaomi
+  DEVICE_CODENAME: lake
+  TWRP_BRANCH: twrp-12.1  # Android version branch
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: docker://ghcr.io/ubports-ci/android-build:main
+    timeout-minutes: 180
 
     steps:
-    - name: Checkout Device Tree
-      uses: actions/checkout@v3
-      with:
-        path: device
+    - name: Checkout Script Repo
+      uses: actions/checkout@v4
 
-    - name: Initialize TWRP Build Environment
+    - name: Set up Build Environment
       run: |
-        mkdir -p ~/android/twrp
-        cd ~/android/twrp
-        repo init -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git -b twrp-12.1
-        repo sync -j$(nproc) --force-sync --no-clone-bundle --no-tags
+        sudo apt-get update -y
+        sudo apt-get install -y bc bison build-essential ccache curl flex git gnupg gperf \
+          liblz4-tool libncurses5-dev libssl-dev libxml2 lzop m4 python3 python3-pip zip
 
-    - name: Copy Device Tree
+    - name: Initialize TWRP Repo
       run: |
-        mkdir -p ~/android/twrp/device/<brand>/<codename>
-        cp -r device/* ~/android/twrp/device/<brand>/<codename>/
+        mkdir -p ~/twrp && cd ~/twrp
+        repo init -u https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git -b $TWRP_BRANCH --depth=1
+        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+
+    - name: Clone Device Tree
+      run: |
+        mkdir -p ~/twrp/device/$DEVICE_BRAND/$DEVICE_CODENAME
+        git clone --depth=1 https://github.com/mdhaaib200520/redmi14c-lake-twrp_device-tree.git ~/twrp/device/$DEVICE_BRAND/$DEVICE_CODENAME
 
     - name: Build TWRP
       run: |
-        cd ~/android/twrp
+        cd ~/twrp
         export ALLOW_MISSING_DEPENDENCIES=true
         source build/envsetup.sh
-        lunch twrp_<codename>-eng
-        mka recoveryimage
+        lunch twrp_$DEVICE_CODENAME-eng
+        mka -j$(nproc --all) recoveryimage
 
-    - name: Upload Recovery Image
+    - name: Prepare Release Assets
+      run: |
+        cd ~/twrp/out/target/product/$DEVICE_CODENAME
+        mv recovery.img TWRP-$DEVICE_CODENAME-$(date +'%Y%m%d').img
+        echo "BUILD_DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
+
+    - name: Upload Artifact
       uses: actions/upload-artifact@v3
       with:
-        name: TWRP-recovery.img
-        path: ~/android/twrp/out/target/product/<codename>/recovery.img
+        name: TWRP-${{ env.DEVICE_CODENAME }}
+        path: ~/twrp/out/target/product/${{ env.DEVICE_CODENAME }}/TWRP-${{ env.DEVICE_CODENAME }}-${{ env.BUILD_DATE }}.img
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # Required to create releases
+
+    steps:
+    - name: Download Artifact
+      uses: actions/download-artifact@v3
+      with:
+        name: TWRP-${{ env.DEVICE_CODENAME }}
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: "TWRP ${{ env.BUILD_DATE }} for ${{ env.DEVICE_CODENAME }}"
+        body: |
+          Unofficial TWRP build for ${{ env.DEVICE_BRAND }} ${{ env.DEVICE_CODENAME }}
+          - Build date: ${{ env.BUILD_DATE }}
+          - Source: [Device Tree](https://github.com/mdhaaib200520/redmi14c-lake-twrp_device-tree.git)
+        files: |
+          TWRP-${{ env.DEVICE_CODENAME }}-${{ env.BUILD_DATE }}.img
